@@ -1,7 +1,5 @@
 # class StaffMemberSchedule < Struct.new(:staff_member, :since, :till, :duration, :timezone)
 class StaffMemberSchedule < Dry::Struct
-
-
   module BitMask
     QuantSize = 5.minutes
 
@@ -32,7 +30,7 @@ class StaffMemberSchedule < Dry::Struct
   attribute :duration, Types.Instance(ActiveSupport::Duration)
 
 
-  delegate :start_hour_offset, :end_hour_offset, :timezone, :events, to: :staff_member
+  delegate :start_hour_offset, :end_hour_offset, :start_weekend_hour_offset, :end_weekend_hour_offset, :timezone, :events, to: :staff_member
 
 
   def initialize *args
@@ -53,7 +51,6 @@ class StaffMemberSchedule < Dry::Struct
     conflicting = {}
 
     quants_in_appointment_duration = (duration / QuantSize).ceil.to_i
-
     (conflicting.map {|a,b| [ [a,since].max, [b, till].min ]} + off_work_intervals).
         reject {|a,b| a == b}.
         # ^ unquanted intervals
@@ -81,9 +78,10 @@ class StaffMemberSchedule < Dry::Struct
         try{|e| Range.new(*e).step(1) }.
         map {|e| e.in_time_zone(staff_member.timezone) }.
         flat_map do |staff_member_tz_day|
-
-        a = [staff_member_tz_day.beginning_of_day, staff_member_tz_day + start_hour_offset]
-        b = [staff_member_tz_day + end_hour_offset, staff_member_tz_day.tomorrow.beginning_of_day]
+        #weekend check and updating start and end time
+        start_hr,end_hr = (since.saturday? || since.sunday?) ?  [start_weekend_hour_offset,end_weekend_hour_offset] : [start_hour_offset,end_hour_offset]
+        a = [staff_member_tz_day.beginning_of_day, staff_member_tz_day + start_hr]
+        b = [staff_member_tz_day + end_hr, staff_member_tz_day.tomorrow.beginning_of_day]
         [a, b]
 
     end.
